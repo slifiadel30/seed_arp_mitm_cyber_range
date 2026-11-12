@@ -1,0 +1,19 @@
+# Variables APG (Answer Protection Generator)
+#
+# Ces valeurs sont generees ALEATOIREMENT pour chaque sandbox au moment
+# du deploiement. Chaque etudiant obtient donc des flags differents pour
+# les niveaux "preuve d'attaque MITM reussie", ce qui empeche de copier
+# la reponse d'un camarade. Les valeurs sont injectees automatiquement
+# dans le provisioning Ansible (meme nom de variable) et utilisees dans
+# training.json via "answer_variable_name" + "variant_answers": true.
+
+# Banniere secrete injectee dans /etc/issue.net du serveur Telnet B.
+# Flag du niveau 5 (MITM Telnet / Task 2) : visible uniquement si
+# l'etudiant a reellement intercepte la session Telnet A<->B.
+motd_secret:
+  type: text
+
+# Mot de code echange automatiquement entre A et B via Netcat.
+# Flag du niveau 7 (MITM Netcat / Task 3).
+secret_name:
+  type: username

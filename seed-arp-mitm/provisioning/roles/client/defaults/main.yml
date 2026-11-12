@@ -1,0 +1,6 @@
+---
+# Valeur de secours utilisee uniquement si le deploiement n'est PAS
+# fait via un pool APG (c.a.d. si variables.yml n'a pas ete resolu).
+# Dans un pool APG, la variable "secret_name" est injectee par la
+# plateforme et prend automatiquement le dessus (extra-vars).
+secret_name: "sentinelle"

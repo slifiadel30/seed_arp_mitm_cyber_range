@@ -1,0 +1,21 @@
+Ce scenario adapte le contenu pedagogique du laboratoire suivant :
+
+  SEED Labs - ARP Cache Poisoning Attack Lab
+  Copyright (c) 2019 Wenliang Du. Tous droits reserves.
+  Usage libre pour un usage pedagogique non commercial uniquement.
+  Les usages commerciaux de ce materiel sont interdits.
+  Le projet SEED a ete finance par plusieurs subventions de la
+  National Science Foundation (NSF) des Etats-Unis.
+
+La structure technique (topology.yml, provisioning Ansible, training.json)
+s'inspire du format du scenario :
+
+  junior-hacker / library-junior-hacker
+  (https://gitlab.ics.muni.cz/muni-kypo-trainings/games/junior-hacker)
+  Cybersecurity Laboratory, Faculty of Informatics, Masaryk University
+  Licence du game design : Creative Commons Attribution 4.0 (CC BY 4.0)
+
+Le contenu pedagogique de ce depot (game_design.md, training.json) est
+mis a disposition sous licence Creative Commons Attribution 4.0
+International (CC BY 4.0) : https://creativecommons.org/licenses/by/4.0
+Le code (topology.yml, provisioning, scripts) est sous licence MIT.

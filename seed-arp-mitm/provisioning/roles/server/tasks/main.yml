@@ -1,0 +1,64 @@
+---
+- name: Ajout des alias reseau
+  loop: "{{ aliases | dict2items }}"
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ item.value }} {{ item.key }}"
+
+- name: Compte utilisateur standard pour la connexion Telnet
+  user:
+    name: seed
+    password: "{{ 'dees' | password_hash('sha512') }}"
+    shell: /bin/bash
+    create_home: yes
+  ignore_errors: yes
+
+- name: Installation du serveur Telnet (xinetd + telnetd)
+  apt:
+    name:
+      - xinetd
+      - telnetd
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Deploiement de la banniere Telnet (contient le flag de la Tache 2)
+  template:
+    src: issue.net.j2
+    dest: /etc/issue.net
+    owner: root
+    mode: '0644'
+
+- name: Configuration du service telnet dans xinetd
+  template:
+    src: telnet.xinetd.j2
+    dest: /etc/xinetd.d/telnet
+    owner: root
+    mode: '0644'
+  notify: Redemarrer xinetd
+
+- name: S'assurer que xinetd est actif et demarre
+  systemd:
+    name: xinetd
+    enabled: yes
+    state: started
+
+- name: Deploiement du service d'ecoute Netcat (contient le flag de la Tache 3)
+  template:
+    src: netcat-listener.service.j2
+    dest: /etc/systemd/system/netcat-listener.service
+    mode: '0644'
+
+- name: Activation et demarrage de l'ecoute Netcat
+  systemd:
+    name: netcat-listener.service
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Creation du fichier de log Netcat
+  file:
+    path: /var/log/netcat_capture.log
+    state: touch
+    owner: root
+    mode: '0644'

@@ -1,0 +1,48 @@
+---
+- name: Ajout des alias reseau
+  loop: "{{ aliases | dict2items }}"
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ item.value }} {{ item.key }}"
+
+- name: Creation du dossier de travail du TP
+  file:
+    path: /home/seed/lab-arp-mitm
+    state: directory
+    owner: seed
+    group: seed
+    mode: '0755'
+
+- name: Copie des squelettes de scripts Scapy a completer
+  copy:
+    src: "{{ item }}"
+    dest: "/home/seed/lab-arp-mitm/{{ item }}"
+    owner: seed
+    group: seed
+    mode: '0755'
+  loop:
+    - task1a_arp_request.py
+    - task1b_arp_reply.py
+    - task1c_arp_gratuitous.py
+    - task2_sniff_spoof_telnet.py
+    - task3_sniff_spoof_netcat.py
+
+- name: IP forwarding desactive par defaut (etape du sujet)
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '0'
+    sysctl_set: yes
+    state: present
+    reload: yes
+  ignore_errors: yes
+
+- name: Desactivation ip_forward (fallback sans collection ansible.posix)
+  lineinfile:
+    path: /etc/sysctl.conf
+    regexp: '^net.ipv4.ip_forward'
+    line: 'net.ipv4.ip_forward=0'
+    create: yes
+
+- name: Application immediate de la valeur sysctl
+  command: sysctl -w net.ipv4.ip_forward=0
+  changed_when: false

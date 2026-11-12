@@ -1,0 +1,347 @@
+{
+  "title": "TP Securite des Systemes - ARP Cache Poisoning & MITM (SEED Labs)",
+  "description": "TP pratique (adapte du SEED Labs \"ARP Cache Poisoning Attack Lab\" de Wenliang Du) : empoisonnement de cache ARP, attaque Man-In-The-Middle et interception/modification de trafic Telnet et Netcat avec Scapy.",
+  "prerequisites": [
+    "Notions de base en reseaux (ARP, TCP/IP)",
+    "Bases de Python 3",
+    "Utilisation d'un terminal Linux"
+  ],
+  "outcomes": [
+    "Comprendre les faiblesses du protocole ARP (absence d'authentification)",
+    "Savoir forger des paquets ARP (request, reply, gratuitous) avec Scapy",
+    "Savoir se placer en position de Man-In-The-Middle sur un reseau local",
+    "Savoir intercepter et modifier du trafic en clair (Telnet, Netcat) avec un script sniff-and-spoof"
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "levels": [
+    {
+      "title": "Introduction",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 1,
+      "minimal_possible_solve_time": null,
+      "content": "# A lire attentivement avant de commencer\n\n* La solution de chaque niveau sera reutilisee dans les niveaux suivants : ne sautez pas d'etape.\n* Ce TP est a but strictement pedagogique. L'utilisation des techniques enseignees ici contre des systemes reels sans autorisation est illegale.\n* Chaque sandbox genere des flags **differents** pour certains niveaux : ne recopiez pas les reponses d'un autre binome, elles ne fonctionneront pas chez vous.\n\n# Mise en situation\n\nVous integrez l'equipe securite reseau d'une entreprise. On vous demande de demontrer, dans un environnement de test isole, la dangerosite du protocole ARP lorsqu'il n'est pas protege.\n\nTrois machines SEED sont deployees sur le **meme reseau local** (aucun routeur entre elles, c'est volontaire) :\n\n| Machine | Role | Adresse IP |\n|---|---|---|\n| **M** (`attacker`) | Votre poste, celui de l'attaquant | `10.0.2.5` |\n| **A** (`client`) | Victime 1 : client Telnet / Netcat | `10.0.2.6` |\n| **B** (`server`) | Victime 2 : serveur Telnet / Netcat | `10.0.2.7` |\n\nVotre objectif : empoisonner le cache ARP des victimes, vous placer en position de **Man-In-The-Middle (MITM)**, puis intercepter et modifier leur trafic, en utilisant Scapy en Python3."
+    },
+    {
+      "title": "Acces a l'environnement",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 1,
+      "minimal_possible_solve_time": null,
+      "passkey": "depart",
+      "cloud_content": "Connectez-vous aux 3 machines pour verifier votre acces.\n\n### Acces au sandbox\n1. Dans la vue de la topologie a droite, clic droit sur **`attacker`**, **`client`** puis **`server`**, et choisissez **`Open GUI`** pour chacune.\n2. Connectez-vous avec l'utilisateur **`seed`** et le mot de passe **`dees`** (identifiants par defaut des machines SEED).\n\nUne fois connecte aux 3 machines, soumettez **`depart`**.",
+      "local_content": "Ce sandbox n'a pas ete teste en local."
+    },
+    {
+      "title": "Cartographie du reseau local",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 4,
+      "minimal_possible_solve_time": null,
+      "answer": "23",
+      "answer_variable_name": null,
+      "content": "Avant d'attaquer, reconnaissez votre terrain de jeu. Depuis **M** (`attacker`), scannez le reseau `10.0.2.0/24` pour identifier les machines **A** et **B**, et le ou les services reseau qu'elles exposent (vous pouvez utiliser `nmap` et/ou `arp-scan`).\n\nLe flag est le **numero de port** sur lequel tourne le service **telnet** du serveur **B**.",
+      "solution": "```\nseed@attacker:~$ nmap -sS 10.0.2.6 10.0.2.7\n...\n10.0.2.7 : 23/tcp open telnet\n```\nLe port telnet standard est le **23**.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Quel outil utiliser ?",
+          "content": "Utilisez `nmap` (scan de ports) ou `arp-scan --localnet` pour lister les machines actives sur le LAN.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "Quelle machine scanner ?",
+          "content": "Scannez les deux adresses `10.0.2.6` et `10.0.2.7` et comparez les ports ouverts.",
+          "hint_penalty": 0.5,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 3,
+      "variant_answers": false,
+      "reference_solution": [
+        {
+          "state_name": "lan_scanned",
+          "prereq_state": [],
+          "cmd": "nmap -sS 10.0.2.6 10.0.2.7",
+          "cmd_type": "bash-command",
+          "cmd_regex": "nmap .*10\\.0\\.2\\.(6|7)",
+          "optional": false
+        }
+      ],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "ARP Cache Poisoning via ARP request (Task 1A)",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 6,
+      "minimal_possible_solve_time": null,
+      "answer": "1",
+      "answer_variable_name": null,
+      "content": "Vous allez maintenant empoisonner le cache ARP de **A** pour que, dans sa table, l'adresse IP de **B** (`10.0.2.7`) pointe vers l'adresse MAC de **M**.\n\nSur **M**, completez le script `~/lab-arp-mitm/task1a_arp_request.py` : il doit forger et envoyer une trame contenant un paquet **ARP request**, a destination de **A**.\n\nAide-memoire (dans un shell `python3`) :\n```\n>>> from scapy.all import *\n>>> ls(ARP)\nhwtype : XShortField = (1)\nptype  : XShortEnumField = (2048)\nhwlen  : ByteField = (6)\nplen   : ByteField = (4)\nop     : ShortEnumField = (1)\nhwsrc  : ARPSourceMACField = (None)\npsrc   : SourceIPField = (None)\nhwdst  : MACField = ('00:00:00:00:00:00')\npdst   : IPField = ('0.0.0.0')\n```\n\nExecutez le script (`sudo python3 task1a_arp_request.py`), puis verifiez sur **A** (console `client`) avec `arp -n` que l'IP `10.0.2.7` est bien associee a l'adresse MAC de **M**.\n\nLe flag est la valeur du champ `op` a utiliser pour qu'un paquet ARP soit bien un **ARP request** (et non une reponse).",
+      "solution": "D'apres `ls(ARP)`, la valeur par defaut de `op` est `1`, qui correspond a `who-has` (ARP request). `op=2` correspondrait a une `ARP reply` (is-at).",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Ou trouver la valeur du champ op ?",
+          "content": "Lancez `python3` sur M, puis `from scapy.all import *` et `ls(ARP)` : la colonne de droite donne la valeur par defaut de chaque champ.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "Comment verifier le resultat sur A ?",
+          "content": "Ouvrez la console de la machine `client` et tapez `arp -n` pour afficher sa table ARP.",
+          "hint_penalty": 1.5,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 3,
+      "variant_answers": false,
+      "reference_solution": [
+        {
+          "state_name": "arp_request_sent",
+          "prereq_state": [
+            "lan_scanned"
+          ],
+          "cmd": "sudo python3 task1a_arp_request.py",
+          "cmd_type": "bash-command",
+          "cmd_regex": "python3 task1a_arp_request\\.py",
+          "optional": false
+        },
+        {
+          "state_name": "arp_cache_checked",
+          "prereq_state": [
+            "arp_request_sent"
+          ],
+          "cmd": "arp -n",
+          "cmd_type": "bash-command",
+          "cmd_regex": "arp -n",
+          "optional": false
+        }
+      ],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "ARP reply et gratuitous ARP (Tasks 1B / 1C)",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 3,
+      "minimal_possible_solve_time": null,
+      "answer": "gratuitous",
+      "answer_variable_name": null,
+      "content": "Reproduisez maintenant l'attaque en utilisant deux autres methodes, sans jamais que **A** n'ait emis de requete au prealable :\n\n- **Task 1B** : completez et executez `task1b_arp_reply.py` (un paquet **ARP reply** non sollicite).\n- **Task 1C** : completez et executez `task1c_arp_gratuitous.py`, qui respecte les caracteristiques suivantes : IP source = IP destination = IP de la machine usurpee, MAC destination (Ethernet et ARP) = broadcast `ff:ff:ff:ff:ff:ff`, et aucune reponse n'est attendue.\n\nVerifiez a chaque fois le cache ARP de **A** avec `arp -n`, et notez vos observations.\n\nLe flag est le **nom technique** (en anglais) de ce type particulier de paquet ARP non sollicite, utilise pour mettre a jour de maniere proactive le cache ARP de **toutes** les machines du reseau en une seule diffusion.",
+      "solution": "Il s'agit du **gratuitous ARP** : un ARP request particulier ou IP source = IP destination, envoye en broadcast, et qui ne necessite aucune reponse.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Indice",
+          "content": "Le sujet decrit ce type de paquet dans la section Task 1C : relisez ses 3 caracteristiques.",
+          "hint_penalty": 0.5,
+          "order": 0
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 2,
+      "variant_answers": false,
+      "reference_solution": [
+        {
+          "state_name": "arp_reply_and_gratuitous_tested",
+          "prereq_state": [
+            "arp_cache_checked"
+          ],
+          "cmd": "sudo python3 task1b_arp_reply.py && sudo python3 task1c_arp_gratuitous.py",
+          "cmd_type": "bash-command",
+          "cmd_regex": "python3 task1(b_arp_reply|c_arp_gratuitous)\\.py",
+          "optional": false
+        }
+      ],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Man-In-The-Middle complet sur Telnet (Task 2)",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 6,
+      "minimal_possible_solve_time": null,
+      "answer": "",
+      "answer_variable_name": "motd_secret",
+      "content": "Vous allez maintenant vous placer reellement en position de MITM entre **A** et **B**.\n\n**Etape 1.** Empoisonnez **simultanement** les deux caches : celui de **A** (IP de **B** -> MAC de **M**) et celui de **B** (IP de **A** -> MAC de **M**). Vous pouvez relancer vos scripts de la Tache 1 en adaptant les IP cibles.\n\n**Etape 2.** Depuis les consoles de **A** et **B**, faites un `ping` entre les deux machines et observez le resultat avec Wireshark/`tcpdump` sur **M**. Les paquets arrivent-ils a destination ?\n\n**Etape 3.** Activez le relais IP sur **M** :\n```\nsudo sysctl net.ipv4.ip_forward=1\n```\nRepetez le test `ping`. Que constatez-vous cette fois ?\n\n**Etape 4.** Depuis la console de **A**, connectez-vous en Telnet au serveur : `telnet 10.0.2.7` (utilisateur `seed`, mot de passe `dees`). Avant meme de vous authentifier, une banniere de service s'affiche.\n\nPendant que la connexion Telnet s'etablit, capturez le trafic sur **M** (`sudo tcpdump -i eth0 -A 'tcp port 23'` ou Wireshark avec le filtre `tcp.port == 23`) : vous devez voir circuler cette banniere en clair.\n\nLe flag est le contenu exact de la ligne **`[NOTE-SERVICE]`** affichee dans la banniere Telnet de **B**, telle que vous l'avez capturee.",
+      "solution": "Une fois les deux caches empoisonnes et le relais IP actif, la session Telnet de A vers B transite obligatoirement par M. En capturant ce trafic (`tcpdump -A 'tcp port 23'`), la banniere `/etc/issue.net` de B, envoyee en clair avant authentification, est visible dans la capture.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Les deux sens sont necessaires",
+          "content": "Pour voir TOUT le trafic A<->B, il faut empoisonner le cache de A ET celui de B, pas un seul des deux.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "Rien ne circule sans relais",
+          "content": "Sans `net.ipv4.ip_forward=1` sur M, les paquets rediriges vers M ne sont jamais retransmis : la connexion Telnet ne peut pas s'etablir.",
+          "hint_penalty": 1.5,
+          "order": 1
+        },
+        {
+          "title": "Ou chercher la banniere ?",
+          "content": "Filtrez le trafic avec `tcp port 23` et regardez les premiers octets echanges, avant toute saisie du mot de passe.",
+          "hint_penalty": 1,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 4,
+      "variant_answers": true,
+      "reference_solution": [
+        {
+          "state_name": "bidirectional_poisoning",
+          "prereq_state": [
+            "arp_reply_and_gratuitous_tested"
+          ],
+          "cmd": "sudo python3 task1a_arp_request.py",
+          "cmd_type": "bash-command",
+          "cmd_regex": "python3 task1a_arp_request\\.py",
+          "optional": false
+        },
+        {
+          "state_name": "ip_forward_enabled",
+          "prereq_state": [
+            "bidirectional_poisoning"
+          ],
+          "cmd": "sudo sysctl net.ipv4.ip_forward=1",
+          "cmd_type": "bash-command",
+          "cmd_regex": "sysctl net\\.ipv4\\.ip_forward=1",
+          "optional": false
+        },
+        {
+          "state_name": "telnet_sniffed",
+          "prereq_state": [
+            "ip_forward_enabled"
+          ],
+          "cmd": "sudo tcpdump -i eth0 -A 'tcp port 23'",
+          "cmd_type": "bash-command",
+          "cmd_regex": "tcpdump .*tcp port 23",
+          "optional": false
+        }
+      ],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Modification du trafic Telnet a la volee (Task 2 suite)",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 6,
+      "minimal_possible_solve_time": null,
+      "answer": "chksum",
+      "answer_variable_name": null,
+      "content": "Vous savez intercepter le trafic. Vous allez maintenant le **modifier**.\n\n**Avant de commencer : repassez `ip_forward` a 0** (`sudo sysctl net.ipv4.ip_forward=0`) une fois la connexion Telnet de A vers B etablie : desormais, c'est votre programme qui doit retransmettre les paquets, pas le noyau de M.\n\nCompletez `~/lab-arp-mitm/task2_sniff_spoof_telnet.py` sur **M** afin que :\n- chaque paquet TCP de **A** vers **B** contenant une charge utile (une touche tapee au clavier) soit remplace par le caractere fixe `Z`,\n- chaque paquet de **B** vers **A** soit retransmis sans modification.\n\nLancez le script, puis tapez n'importe quel texte dans la fenetre Telnet de **A** : **B** doit afficher uniquement des `Z`, quoi que vous tapiez.\n\nIndice technique : en reconstruisant un paquet IP a partir de `pkt[IP]` puis en changeant sa charge utile TCP, les sommes de controle (checksums) IP et TCP deviennent invalides.\n\nLe flag est le **nom de l'attribut** Scapy qu'il faut supprimer (avec `del`) sur les en-tetes IP et TCP pour forcer Scapy a recalculer automatiquement ces sommes de controle.",
+      "solution": "```python\nnewpkt = IP(pkt[IP])\ndel newpkt.chksum\ndel newpkt[TCP].chksum\ndel newpkt[TCP].payload\n```\nL'attribut a supprimer est `chksum` (sur l'en-tete IP et sur l'en-tete TCP).",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Pourquoi le resultat affiche est-il incoherent sans cette etape ?",
+          "content": "Si vous changez les donnees sans retoucher les sommes de controle, le paquet est rejete par le destinataire car il semble corrompu.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "Syntaxe Scapy",
+          "content": "Utilisez `del objet.nom_du_champ` pour effacer un champ deja renseigne ; Scapy le recalculera automatiquement a l'envoi s'il est absent.",
+          "hint_penalty": 2,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 4,
+      "variant_answers": false,
+      "reference_solution": [
+        {
+          "state_name": "ip_forward_disabled_again",
+          "prereq_state": [
+            "telnet_sniffed"
+          ],
+          "cmd": "sudo sysctl net.ipv4.ip_forward=0",
+          "cmd_type": "bash-command",
+          "cmd_regex": "sysctl net\\.ipv4\\.ip_forward=0",
+          "optional": false
+        },
+        {
+          "state_name": "telnet_spoofed",
+          "prereq_state": [
+            "ip_forward_disabled_again"
+          ],
+          "cmd": "sudo python3 task2_sniff_spoof_telnet.py",
+          "cmd_type": "bash-command",
+          "cmd_regex": "python3 task2_sniff_spoof_telnet\\.py",
+          "optional": false
+        }
+      ],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Man-In-The-Middle sur Netcat (Task 3)",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 5,
+      "minimal_possible_solve_time": null,
+      "answer": "",
+      "answer_variable_name": "secret_name",
+      "content": "Un service interne echange automatiquement, toutes les 15 secondes environ, un petit message entre **A** et **B** via Netcat sur le port **`9090`** (vous pouvez le constater sur **B** avec `sudo nc -lk 10.0.2.7 9091` -- non, ce service tourne deja en arriere-plan : ne le relancez pas, contentez-vous de l'observer).\n\nTant que vous restez en position de MITM (caches de **A** et **B** empoisonnes, et retransmission active -- noyau ou script), ce trafic transite par **M**.\n\nCompletez et lancez `~/lab-arp-mitm/task3_sniff_spoof_netcat.py` sur **M** pour capturer ce trafic `tcp port 9090` et lire le message en clair.\n\nLe flag est le **mot de code** (`CODE:...`) que vous avez intercepte dans ce message.\n\n*Pour aller plus loin (non note) : comme dans le sujet original, modifiez votre script pour remplacer chaque occurrence de ce mot de code par une sequence de `A` de la meme longueur avant retransmission a B, sans casser la connexion TCP.*",
+      "solution": "En remettant les deux caches ARP a jour vers M (ou en conservant l'empoisonnement precedent) et en sniffant le port 9090 avec Scapy (`sniff(filter='tcp port 9090', prn=...)`), le message `CODE:<mot_de_code>` apparait en clair, le protocole Netcat ne chiffrant rien.",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Le MITM doit etre toujours actif",
+          "content": "Si vos caches ARP ont expire ou si vous avez arrete votre script de relais, vous ne verrez plus passer ce trafic : relancez l'empoisonnement si besoin.",
+          "hint_penalty": 1,
+          "order": 0
+        },
+        {
+          "title": "Quel filtre utiliser ?",
+          "content": "Le message circule sur le port `9090` : utilisez le filtre `tcp port 9090` avec `sniff()` ou `tcpdump`.",
+          "hint_penalty": 1,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 4,
+      "variant_answers": true,
+      "reference_solution": [
+        {
+          "state_name": "netcat_sniffed",
+          "prereq_state": [
+            "telnet_spoofed"
+          ],
+          "cmd": "sudo python3 task3_sniff_spoof_netcat.py",
+          "cmd_type": "bash-command",
+          "cmd_regex": "python3 task3_sniff_spoof_netcat\\.py",
+          "optional": false
+        }
+      ],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    }
+  ],
+  "estimated_duration": 32,
+  "variant_sandboxes": true
+}

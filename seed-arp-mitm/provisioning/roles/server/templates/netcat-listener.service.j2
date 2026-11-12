@@ -1,0 +1,11 @@
+[Unit]
+Description=Ecoute Netcat du serveur B (TP ARP/MITM)
+After=network.target
+
+[Service]
+ExecStart=/bin/sh -c '/bin/nc -lk 10.0.2.7 9090 >> /var/log/netcat_capture.log 2>&1'
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

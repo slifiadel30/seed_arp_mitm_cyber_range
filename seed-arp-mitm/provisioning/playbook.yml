@@ -1,0 +1,28 @@
+---
+# Configuration commune aux 3 machines SEED (outils reseau de base)
+- name: Configuration commune des machines
+  hosts: hosts
+  become: yes
+  roles:
+    - hosts
+
+# Machine M : l'attaquant. Recoit les scripts Scapy a completer.
+- name: Configuration de la machine attaquante (M)
+  hosts: attacker
+  become: yes
+  roles:
+    - attacker
+
+# Machine A : le client Telnet / Netcat (victime 1)
+- name: Configuration du client (A)
+  hosts: client
+  become: yes
+  roles:
+    - client
+
+# Machine B : le serveur Telnet / Netcat (victime 2)
+- name: Configuration du serveur (B)
+  hosts: server
+  become: yes
+  roles:
+    - server

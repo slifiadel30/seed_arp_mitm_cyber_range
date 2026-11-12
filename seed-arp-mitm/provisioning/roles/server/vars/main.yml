@@ -1,0 +1,4 @@
+aliases:
+  attacker: 10.0.2.5
+  client: 10.0.2.6
+  server: 10.0.2.7

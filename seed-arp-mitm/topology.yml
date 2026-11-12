@@ -1,0 +1,52 @@
+name: seed-arp-cache-poisoning-mitm
+
+# Topologie : 3 machines SEED sur le MEME segment reseau (meme switch).
+# C'est volontaire : l'attaque ARP cache poisoning necessite que
+# l'attaquant (M) soit dans le meme domaine de diffusion (L2) que les
+# victimes A (client Telnet/Netcat) et B (serveur Telnet/Netcat).
+# Aucun routeur n'est donc utilise entre les 3 machines.
+
+hosts:
+  - name: attacker
+    base_box:
+      image: seed
+      mgmt_user: seed
+    flavor: m1.medium
+
+  - name: client
+    base_box:
+      image: seed
+      mgmt_user: seed
+    flavor: m1.medium
+
+  - name: server
+    base_box:
+      image: seed
+      mgmt_user: seed
+    flavor: m1.medium
+
+routers: []
+
+wan:
+  name: internet-connection
+  cidr: 100.100.100.0/24
+
+networks:
+  - name: lan-switch
+    cidr: 10.0.2.0/24
+    accessible_by_user: True
+
+net_mappings:
+  - host: attacker
+    network: lan-switch
+    ip: 10.0.2.5
+
+  - host: client
+    network: lan-switch
+    ip: 10.0.2.6
+
+  - host: server
+    network: lan-switch
+    ip: 10.0.2.7
+
+groups: []

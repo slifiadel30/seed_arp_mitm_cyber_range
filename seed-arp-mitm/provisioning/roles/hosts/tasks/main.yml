@@ -1,0 +1,42 @@
+---
+# Paquets communs necessaires sur les 3 machines pour le TP ARP/MITM
+
+- name: Mise a jour du cache apt
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Installation des outils reseau et de capture communs
+  apt:
+    name:
+      - net-tools
+      - iproute2
+      - tcpdump
+      - tshark
+      - python3-scapy
+      - python3-pip
+      - telnet
+      - netcat-openbsd
+      - nmap
+      - arp-scan
+      - ethtool
+      - unzip
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Autoriser la capture tshark aux utilisateurs non-root (groupe wireshark)
+  lineinfile:
+    path: /etc/group
+    regexp: '^wireshark:'
+    state: absent
+  ignore_errors: yes
+  changed_when: false
+
+- name: Desactivation des offloads reseau (rend le spoofing Scapy fiable)
+  shell: |
+    IFACE=$(ip route | awk '/default/ {print $5; exit}')
+    [ -z "$IFACE" ] && IFACE=$(ip -o -4 addr show | awk '{print $2}' | grep -v lo | head -n1)
+    ethtool -K "$IFACE" rx off tx off tso off gso off gro off 2>/dev/null || true
+  changed_when: false
+  ignore_errors: yes

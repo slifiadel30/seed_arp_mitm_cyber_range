@@ -1,0 +1,38 @@
+---
+- name: Ajout des alias reseau
+  loop: "{{ aliases | dict2items }}"
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ item.value }} {{ item.key }}"
+
+- name: Deploiement du script d'envoi Netcat automatique (contient le flag Tache 3)
+  template:
+    src: send_secret.sh.j2
+    dest: /usr/local/bin/send_secret.sh
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Deploiement du service systemd associe
+  template:
+    src: send-secret.service.j2
+    dest: /etc/systemd/system/send-secret.service
+    mode: '0644'
+
+- name: Deploiement du timer systemd associe
+  template:
+    src: send-secret.timer.j2
+    dest: /etc/systemd/system/send-secret.timer
+    mode: '0644'
+
+- name: Activation et demarrage du timer Netcat
+  systemd:
+    name: send-secret.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Verification que le client telnet est present (utilise pour la Tache 2)
+  apt:
+    name: telnet
+    state: present
