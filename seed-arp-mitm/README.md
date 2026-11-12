@@ -1,4 +1,4 @@
-# TP Securite des Systemes - ARP Cache Poisoning & MITM
+# TP Securite des Reseaux - ARP Cache Poisoning & MITM
 
 Scenario pour la **CyberRangeCZ Platform**, adapte du *SEED Labs "ARP Cache
 Poisoning Attack Lab"* (Wenliang Du) et construit sur le meme format que
